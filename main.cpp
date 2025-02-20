@@ -1,33 +1,244 @@
-//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
+#include "auilib/auilib.h"
+#include "BetterUI.h"
+#include <nlohmann/json.hpp>
+#include <fstream>
+#include <iostream>
+#include <unordered_map>
+#include <string>
 
 using namespace fdm;
+using json = nlohmann::json;
 
-// Initialize the DLLMain
 initDLL
 
+aui::VBoxContainer settingsContainer;
+
+QuadRenderer qr{};
+FontRenderer font{};
+
+gui::Interface ui;
+
+aui::HBoxContainer tipContainer; // for the whole box
+aui::VBoxContainer textContainer; // just for name and position
+aui::HBoxContainer coordsContainer; // for seperate coordinates
+
+gui::Image icon;
+gui::Text nameText{};
+gui::Text positionTextX{}; // Seperate texts for each coord because i want them to be different colors like in compass
+gui::Text positionTextY{}; // I want BBCode for cristmass Mashpoe pls
+gui::Text positionTextZ{};
+gui::Text positionTextW{};
+
+glm::uint8_t targetBlockId;
+glm::ivec4 targetPos;
+std::unordered_map<uint8_t, std::string> blockNames;
+
+gui::AlignmentX alignmentX;
+gui::AlignmentY alignmentY;
+
+gui::Text title;
+gui::Slider xSlider{};
+gui::Slider ySlider{};
+
+static bool initializedSettings = false;
+static bool isDisplayingCoords = false;
+std::string configPath;
+
+std::unordered_map<uint8_t, std::string> loadBlockNamesFromJSON(const std::string& filename) {
+	std::unordered_map<uint8_t, std::string> blockNames;
+
+	std::ifstream file(filename); // Open the file
+	if (!file.is_open()) {
+		std::cerr << "Failed to open file: " << filename << std::endl;
+		return blockNames; // Return empty map if failed
+	}
+
+	json j;
+	file >> j;  // Parse the JSON file
+
+	// Iterate through the JSON data
+	for (auto& [key, value] : j.items()) {
+		// Only process blocks (not tools or other items)
+		if (value["type"] == "block") {
+			uint8_t blockId = value["baseAttributes"]["id"];
+			blockNames[blockId] = key;  // Map block ID to name
+		}
+	}
+
+	return blockNames;  // Return the filled map
+}
+
+std::string getBlockName(uint8_t blockId) {
+	auto it = blockNames.find(blockId);
+	if (it != blockNames.end()) {
+		return it->second;  // Return block name if found
+	}
+	return "Unknown Block";  // Return a default value if not found
+}
+
+void viewportCallback(void* user, const glm::ivec4& pos, const glm::ivec2& scroll)
+{
+	GLFWwindow* window = (GLFWwindow*)user;
+
+	// update the render viewport
+	int wWidth, wHeight;
+	glfwGetWindowSize(window, &wWidth, &wHeight);
+	glViewport(pos.x, wHeight - pos.y - pos.w, pos.z, pos.w);
+
+	// create a 2D projection matrix from the specified dimensions and scroll position
+	glm::mat4 projection2D = glm::ortho(0.0f, (float)pos.z, (float)pos.w, 0.0f, -1.0f, 1.0f);
+	projection2D = glm::translate(projection2D, { scroll.x, scroll.y, 0 });
+
+	// update all 2D shaders
+	const Shader* textShader = ShaderManager::get("textShader");
+	textShader->use();
+	glUniformMatrix4fv(glGetUniformLocation(textShader->id(), "P"), 1, GL_FALSE, &projection2D[0][0]);
+
+	const Shader* tex2DShader = ShaderManager::get("tex2DShader");
+	tex2DShader->use();
+	glUniformMatrix4fv(glGetUniformLocation(tex2DShader->id(), "P"), 1, GL_FALSE, &projection2D[0][0]);
+
+	const Shader* quadShader = ShaderManager::get("quadShader");
+	quadShader->use();
+	glUniformMatrix4fv(glGetUniformLocation(quadShader->id(), "P"), 1, GL_FALSE, &projection2D[0][0]);
+}
+
+//Initialize stuff when entering world
 $hook(void, StateGame, init, StateManager& s)
 {
-	// Your code that runs at first frame here (it calls when you load into the world)
-
 	original(self, s);
+
+	blockNames = loadBlockNamesFromJSON("itemInfo.json");
+
+	font = { ResourceManager::get("pixelFont.png"), ShaderManager::get("textShader") };
+
+
+	qr.shader = ShaderManager::get("quadShader");
+	qr.init(); 
+
+	ui = gui::Interface{ s.window };
+	ui.viewportCallback = viewportCallback;
+	ui.viewportUser = s.window;
+	ui.font = &font;
+	ui.qr = &qr;
+
+	icon.tr = ItemBlock::tr;
+	icon.width = 70;
+	icon.height = 72;
+
+	nameText.text = "Target name";
+	nameText.alignX(gui::ALIGN_LEFT);
+	nameText.size = 2;
+	nameText.shadow = true;
+
+
+	positionTextX.text = "X";
+	positionTextX.alignX(gui::ALIGN_LEFT);
+	positionTextX.size = 1;
+	positionTextX.shadow = true;
+	positionTextX.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f); //X is blue
+
+	positionTextY.text = "Y";
+	positionTextY.alignX(gui::ALIGN_LEFT);
+	positionTextY.size = 1;
+	positionTextY.shadow = true;
+	positionTextY.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); //Y is white
+
+	positionTextZ.text = "Z";
+	positionTextZ.alignX(gui::ALIGN_LEFT);
+	positionTextZ.size = 1;
+	positionTextZ.shadow = true;
+	positionTextZ.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f); //Z is red
+
+	positionTextW.text = "W";
+	positionTextW.alignX(gui::ALIGN_LEFT);
+	positionTextW.size = 1;
+	positionTextW.shadow = true;
+	positionTextW.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f); //W is green
+
+	coordsContainer.xSpacing = 10;
+	coordsContainer.xMargin = 0;
+	coordsContainer.addElement(&positionTextX);
+	coordsContainer.addElement(&positionTextY);
+	coordsContainer.addElement(&positionTextZ);
+	coordsContainer.addElement(&positionTextW);
+
+	textContainer.ySpacing = 10;
+	textContainer.yMargin = 10;
+	textContainer.elementYOffset = 15;
+	textContainer.addElement(&nameText);
+
+	tipContainer.addElement(&icon);
+	tipContainer.addElement(&textContainer);
+	tipContainer.alignX(alignmentX);
+	tipContainer.alignY(alignmentY);
+	tipContainer.elementXOffset = -8;
+	tipContainer.yMargin = 0;
+	tipContainer.renderBackground = true;
+
+	ui.addElement(&tipContainer);
 }
 
-$hook(void, Player, update, World* world, double dt, EntityPlayer* entityPlayer)
+//Render custom UI
+$hook(void, Player, renderHud, GLFWwindow* window)
 {
-	// Your code that runs every frame here (it only calls when you play in world, because its Player's function)
+	original(self, window);
 
-	original(self, world, dt, entityPlayer);
+	if (!self->targetingBlock) return;
+	if (self->inventoryManager.secondary) return ;
+
+	// technically in the game glDepthMask() is used, but for some reason that doesn't work in mods, thus using glDisable/glEnable instead.
+	glDisable(GL_DEPTH_TEST);
+	icon.tr->setClip(36 * (targetBlockId - 1), 37, 35, 36);
+	nameText.setText(getBlockName(targetBlockId));
+	
+	if (self->isHoldingCompass() && !isDisplayingCoords) {
+		isDisplayingCoords = true;
+		textContainer.addElement(&coordsContainer);
+	}
+	else if (!self->isHoldingCompass() && isDisplayingCoords) {
+		isDisplayingCoords = false;
+		textContainer.removeElement(&coordsContainer);
+	}
+	else if (self->isHoldingCompass()) {
+		positionTextX.text = std::format("X:{}", targetPos.x);
+		positionTextY.text = std::format("Y:{}", targetPos.y);
+		positionTextZ.text = std::format("Z:{}", targetPos.z);
+		positionTextW.text = std::format("W:{}", targetPos.w);
+	}
+	
+	ui.render();
+	glEnable(GL_DEPTH_TEST);
 }
 
-$hook(bool, Player, keyInput, GLFWwindow* window, World* world, int key, int scancode, int action, int mods)
+//Update targeted block
+$hook(void, Player, updateTargetBlock, World* world, float maxDist)
 {
-	// Your code that runs when Key Input happens (check GLFW Keyboard Input tutorials)|(it only calls when you play in world, because its Player's function)
+	original(self, world, maxDist);
 
-	return original(self, window, world, key, scancode, action, mods);
+	if (!self->targetingBlock) {
+		targetBlockId = -1;
+		return;
+	}
+
+	targetBlockId = world->getBlock(self->targetBlock);
+	targetPos = self->targetBlock;
 }
 
+void updateConfig(const std::string& path, const nlohmann::json& j)
+{
+	std::ofstream configFileO(path);
+	if (configFileO.is_open())
+	{
+		configFileO << j.dump(4);
+		configFileO.close();
+	}
+}
+
+//Initialize stuff when launching the game
 $hook(void, StateIntro, init, StateManager& s)
 {
 	original(self, s);
@@ -36,4 +247,250 @@ $hook(void, StateIntro, init, StateManager& s)
 	glewExperimental = true;
 	glewInit();
 	glfwInit();
+
+	// Thank god 4dkeybinds had config reading code for me to steal
+
+	configPath = std::format("{}/config.json", fdm::getModPath(fdm::modID));
+
+	nlohmann::json configJson
+	{
+		{ "AlignmentX", alignmentX },
+		{ "AlignmentY", alignmentY }
+	};
+
+	if (!std::filesystem::exists(configPath))
+	{
+		updateConfig(configPath, configJson);
+	}
+	else
+	{
+		std::ifstream configFileI(configPath);
+		if (configFileI.is_open())
+		{
+			configJson = nlohmann::json::parse(configFileI);
+			configFileI.close();
+		}
+	}
+
+	if (!configJson.contains("AlignmentX"))
+	{
+		configJson["AlignmentX"] = alignmentX;
+		updateConfig(configPath, configJson);
+	}
+	if (!configJson.contains("AlignmentY"))
+	{
+		configJson["AlignmentY"] = alignmentY;
+		updateConfig(configPath, configJson);
+	}
+
+	alignmentX = configJson["AlignmentX"];
+	alignmentY = configJson["AlignmentY"];
+}
+
+//Hijacking settings or smth
+$hook(void, StateSettings, init, StateManager& s)
+{
+	initializedSettings = false;
+	original(self, s);
+}
+
+inline static int getY(gui::Element* element)
+{
+	// Tr1ngle is comparing typeid name strings instead of using dynamic_cast because typeids of 4dminer and typeids of 4dm.h are different
+	if (0 == strcmp(typeid(*element).name(), "class gui::Button"))
+		return ((gui::Button*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class gui::CheckBox"))
+		return ((gui::CheckBox*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class gui::Image"))
+		return ((gui::Image*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class gui::Slider"))
+		return ((gui::Slider*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class gui::Text"))
+		return ((gui::Text*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class gui::TextInput"))
+		return ((gui::TextInput*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::Button"))
+		return ((gui::Button*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::CheckBox"))
+		return ((gui::CheckBox*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::Image"))
+		return ((gui::Image*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::Slider"))
+		return ((gui::Slider*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::Text"))
+		return ((gui::Text*)element)->yOffset;
+	else if (0 == strcmp(typeid(*element).name(), "class fdm::gui::TextInput"))
+		return ((gui::TextInput*)element)->yOffset;
+	return 0;
+}
+
+void updateAlignment() {
+	switch (alignmentX) {
+	case gui::ALIGN_LEFT:
+		xSlider.setText("Horizontal alignment: Left");
+		break;
+	case gui::ALIGN_RIGHT:
+		xSlider.setText("Horizontal alignment: Right");
+		break;
+	case gui::ALIGN_CENTER_X:
+		xSlider.setText("Horizontal alignment: Center");
+		break;
+	}
+	switch (alignmentY) {
+	case gui::ALIGN_TOP:
+		ySlider.setText("Vertical alignment: Top");
+		break;
+	case gui::ALIGN_BOTTOM:
+		ySlider.setText("Vertical alignment: Bottom");
+		break;
+	case gui::ALIGN_CENTER_Y:
+		ySlider.setText("Vertical alignment: Center");
+		break;
+	}
+	tipContainer.alignX(alignmentX);
+	tipContainer.alignY(alignmentY);
+}
+
+//Mapping slider values to alignment enum values and vice versa
+gui::AlignmentX getXAlignment(int value) {
+	switch (value) {
+	case 0:
+		return gui::ALIGN_LEFT;
+	case 1:
+		return gui::ALIGN_CENTER_X;
+	case 2:
+		return gui::ALIGN_RIGHT;
+	}
+	return gui::ALIGN_LEFT;
+}
+int getXValue(gui::AlignmentX alignment) {
+	switch (alignment) {
+	case gui::ALIGN_LEFT:
+		return 0;
+	case gui::ALIGN_CENTER_X:
+		return 1;
+	case gui::ALIGN_RIGHT:
+		return 2;
+	}
+	return 0;
+}
+gui::AlignmentY getYAlignment(int value) {
+	switch (value) {
+	case 0:
+		return gui::ALIGN_BOTTOM;
+	case 1:
+		return gui::ALIGN_CENTER_Y;
+	case 2:
+		return gui::ALIGN_TOP;
+	}
+	return gui::ALIGN_BOTTOM;
+}
+int getYValue(gui::AlignmentY alignment) {
+	switch (alignment) {
+	case gui::ALIGN_BOTTOM:
+		return 0;
+	case gui::ALIGN_CENTER_Y:
+		return 1;
+	case gui::ALIGN_TOP:
+		return 2;
+	}
+	return 0;
+}
+
+void initSettings() {
+	title.setText("WAILA Options:");
+	title.alignX(gui::ALIGN_CENTER_X);
+
+
+	xSlider.alignX(gui::ALIGN_CENTER_X);
+	
+	xSlider.range = 2; // 0,1,2
+	xSlider.value = getXValue(alignmentX);
+	xSlider.width = 500;
+	xSlider.user = &xSlider;
+	xSlider.callback = [](void* user, int value)
+		{
+			alignmentX = getXAlignment(value);
+			updateAlignment();
+			updateConfig(configPath, { { "AlignmentX", alignmentX },{ "AlignmentY", alignmentY } });
+		};
+
+
+
+	ySlider.value = getYValue(alignmentY);
+	ySlider.alignX(gui::ALIGN_CENTER_X);
+	ySlider.range = 2; // 0,1,2
+	ySlider.width = 500;
+	ySlider.user = &ySlider;
+	ySlider.callback = [](void* user, int value)
+		{
+			alignmentY = getYAlignment(value);
+			updateAlignment();
+			updateConfig(configPath, { { "AlignmentX", alignmentX },{ "AlignmentY", alignmentY } });
+		};
+
+	updateAlignment();
+}
+
+void initSettingsWithoutBetterUI(StateSettings *self) {
+	int lowestY = 0;
+	for (auto& e : self->mainContentBox.elements)
+	{
+		//wth is a secret button? gonna check it out rn
+		if (e == &self->secretButton) // skip the secret button
+			continue;
+
+		lowestY = std::max(getY(e), lowestY);
+	}
+	int oldLowest = lowestY;
+
+	initSettings();
+
+	title.size = 2;
+	title.offsetY(lowestY += 100);
+	xSlider.offsetY(lowestY += 100);
+	ySlider.offsetY(lowestY += 100);
+
+	self->mainContentBox.addElement(&title);
+	self->mainContentBox.addElement(&xSlider);
+	self->mainContentBox.addElement(&ySlider);
+
+	self->secretButton.yOffset += lowestY - oldLowest;
+	self->mainContentBox.scrollH += lowestY - oldLowest;
+}
+
+void initSettingsWithBetterUI(StateSettings *self) {
+	settingsContainer.clear();
+
+	initSettings();
+
+	title.size = 3;
+	title.shadow = true;
+
+	settingsContainer.addElement(&title);
+	settingsContainer.addElement(&xSlider);
+	settingsContainer.addElement(&ySlider);
+
+	settingsContainer.ySpacing = 20;
+	
+	BetterUI::getCategoryContainer()->addElement(&settingsContainer, BetterUI::getCategoryContainer()->elements.size()-1);
+}
+
+//Add custom settings 
+$hook(void, StateSettings, render, StateManager& s)
+{
+	original(self, s);
+
+	if (initializedSettings)
+		return;
+
+	if (fdm::isModLoaded("zihed.betterui")) {
+		initSettingsWithBetterUI(self);
+	}
+	else {
+		initSettingsWithoutBetterUI(self);
+	}
+
+	initializedSettings = true;
+
 }
