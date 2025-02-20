@@ -5,7 +5,7 @@
 using namespace fdm;
 
 namespace aui {
-	//Dogshit code, dont use it pls for your own sake
+	// Actually kinda usable already but still gotta review this in the future
 	class VBoxContainer : public gui::Element, public gui::ElemContainer
 	{
 	public:
@@ -16,28 +16,37 @@ namespace aui {
 		uint32_t width = 0;
 		uint32_t height = 0;
 
+		//  If >1 will try to arrange to multiple columns if possible
 		unsigned int maxColumns = 1;
 
+		// "Actual" topleft position of the box
 		int xPos = 0;
 		int yPos = 0;
 
+		// Additional offset set by parent
 		int xOffset = 0;
 		int yOffset = 0;
 
+		// Offsets of the first element
 		int elementXOffset = 0;
 		int elementYOffset = 0;
 
+		// Additional size on top of what is automatically determined
 		int xMargin = 10;
 		int yMargin = 10;
 
+		// Distance between "Actual" border of the box and its drawn background
 		int xPadding = 8;
 		int yPadding = 8;
 
+		// Space between children
 		int xSpacing = 0;
 		int ySpacing = 0;
 
 		gui::AlignmentX xAlign = gui::ALIGN_LEFT;
 		gui::AlignmentY yAlign = gui::ALIGN_TOP;
+
+		gui::AlignmentX elementXAlign = gui::ALIGN_LEFT;
 
 		bool renderBackground = false;
 
@@ -106,10 +115,19 @@ namespace aui {
 						Height = text->size * 7;
 
 					elements[index]->offsetY(posY );
-					//elements[i]->offsetX(posX + width / 2 - Width / 2); //alligns all elements to right
-					elements[index]->offsetX(posX ); //alligns all elements to center
-					//elements[i]->offsetX(posX - width / 2 + Width / 2); //alligns all elements to left
-					
+
+					switch (elementXAlign)
+					{
+					case gui::ALIGN_LEFT:
+						elements[i]->offsetX(posX); // Level of identation: 7
+						break;
+					case gui::ALIGN_CENTER_X:
+						elements[index]->offsetX(posX + width / 2 - Width / 2); // With every other level of nesting...
+						break;
+					case gui::ALIGN_RIGHT:
+						elements[i]->offsetX(posX + width  - Width); // we stray further from god.
+						break;
+					}
 					posY += Height + ySpacing;
 				}
 				posX += width+xSpacing;

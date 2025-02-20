@@ -5,37 +5,48 @@
 using namespace fdm;
 
 namespace aui {
-	//Even more dogshit code, dont use it pls for your own sake
+	// Actually kinda usable already but still gotta review this in the future
 	class HBoxContainer : public gui::Element, public gui::ElemContainer
 	{
 	public:
-		bool debug = false;
+		int currentCursorType = GLFW_ARROW_CURSOR;
+		gui::Element* selectedElem;
 		std::vector<gui::Element*> elements{};
 		QuadRenderer* background = Item::qr;
 		uint32_t width = 100;
 		uint32_t height = 100;
 
+		//  If >1 will try to arrange to multiple rows if possible
 		unsigned int maxRows = 1;
 
+		// "Actual" topleft position of the box
 		int xPos = 0;
 		int yPos = 0;
 
+		// Additional offset set by parent
 		int xOffset = 0;
 		int yOffset = 0;
 
+		// Offsets of the first element
 		int elementXOffset = 0;
 		int elementYOffset = 0;
 
+		// Additional size on top of what is automatically determined
 		int xMargin = 10;
 		int yMargin = 10;
+
+		// Distance between "Actual" border of the box and its drawn background
 		int xPadding = 8;
 		int yPadding = 8;
 
+		// Space between children
 		int xSpacing = 0;
 		int ySpacing = 0;
 
 		gui::AlignmentX xAlign = gui::ALIGN_LEFT;
 		gui::AlignmentY yAlign = gui::ALIGN_TOP;
+
+		gui::AlignmentY elementYAlign = gui::ALIGN_BOTTOM;
 
 		bool renderBackground = false;
 
@@ -46,6 +57,7 @@ namespace aui {
 			int Width = 0;
 			width = 0;
 			height = 0;
+
 			//Get size of the box based on child elements
 			for (int i = 0;i < elements.size();i++) {
 				elements[i]->getSize(w, &Width, &Height);
@@ -58,6 +70,7 @@ namespace aui {
 				if (Height > height) height = Height;
 				width += Width+ xSpacing;
 			}
+
 			//Set position of the box
 			w->getSize(&Width, &Height);
 			width += xMargin*2;
@@ -89,11 +102,6 @@ namespace aui {
 				break;
 			};
 
-			if (debug) {
-				Console::printLine(std::format("offsetX: {}, pos {}, padding: {}", xOffset, xPos, xPadding));
-				Console::printLine(std::format("offsetY: {}, pos {}, padding: {}", yOffset, yPos, yPadding));
-			}
-
 			//Arrange child elements
 			int posY = yPos + elementYOffset + yMargin - (rows - 1) * (height / 2 + ySpacing)+yOffset;
 			for (int j = 0;j < rows;j++) {
@@ -106,10 +114,20 @@ namespace aui {
 					if (auto* text = dynamic_cast<gui::Text*>(elements[i]))
 						Height = text->size * 7;
 
-					elements[index]->offsetY(posY);
-					//elements[i]->offsetX(posX + width / 2 - Width / 2); //alligns all elements to right
-					elements[index]->offsetX(posX); //alligns all elements to center
-					//elements[i]->offsetX(posX - width / 2 + Width / 2); //alligns all elements to left
+					elements[index]->offsetX(posX);
+
+					switch (elementYAlign)
+					{
+					case gui::ALIGN_BOTTOM:
+						elements[i]->offsetY(posY); // Level of identation: 7
+						break;
+					case gui::ALIGN_CENTER_Y:
+						elements[index]->offsetY(posY + height / 2 - Height / 2); // With every other level of nesting...
+						break;
+					case gui::ALIGN_TOP:
+						elements[i]->offsetY(posY + height  - Height); // we stray further from god.
+						break;
+					}
 
 					posX += Width + xSpacing;
 				}
@@ -117,7 +135,7 @@ namespace aui {
 			}
 
 			
-				//Render stuff
+			//Render stuff
 			if (renderBackground) {
 				background->setPos(xPos+xOffset + xPadding, yPos + yOffset + yPadding, width - xPadding * 2, height - yPadding * 2);
 				background->setQuadRendererMode(GL_TRIANGLES);
@@ -147,6 +165,10 @@ namespace aui {
 		{
 			elements.push_back(e);
 		}
+		void addElement(gui::Element* e, int pos)
+		{
+			elements.insert(elements.begin() + pos, e);
+		}
 		bool removeElement(gui::Element* e) override
 		{
 			return elements.erase(std::remove(elements.begin(), elements.end(), e), elements.end()) != elements.end();
@@ -160,5 +182,53 @@ namespace aui {
 			return elements.empty();
 		}
 
+		//Succesfully stolen from ContentBox.h
+
+
+		bool mouseInput(const gui::Window* w, double xpos, double ypos) override
+		{
+			if (elements.empty()) return false;
+
+			for (auto& el : elements)
+			{
+				bool r = el->mouseInput(w, xpos, ypos);
+				if (r)
+				{
+					this->currentCursorType = el->getCursorType();
+					return true;
+				}
+			}
+
+			return false;
+		}
+		bool mouseButtonInput(const gui::Window* w, int button, int action, int mods) override
+		{
+			if (elements.empty()) return false;
+
+			for (auto& el : elements)
+			{
+				bool r = el->mouseButtonInput(w, button, action, mods);
+				if (r)
+				{
+					this->currentCursorType = el->getCursorType();
+					selectedElem = el;
+					return true;
+				}
+			}
+
+		}
+		void select() override
+		{
+			if (elements.empty()) return;
+			if (selectedElem == nullptr) return;
+			selectedElem->select();
+		}
+		void deselect() override
+		{
+			if (elements.empty()) return;
+			if (selectedElem == nullptr) return;
+			selectedElem->deselect();
+			selectedElem = nullptr;
+		}
 	};
 }

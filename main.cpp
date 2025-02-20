@@ -1,4 +1,4 @@
-#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
+//#define DEBUG_CONSOLE // Uncomment this if you want a debug console to start. You can use the Console class to print. You can use Console::inStrings to get input.
 
 #include <4dm.h>
 #include "auilib/auilib.h"
@@ -33,7 +33,8 @@ gui::Text positionTextZ{};
 gui::Text positionTextW{};
 
 glm::uint8_t targetBlockId;
-glm::ivec4 targetPos;
+std::string targetName;
+glm::vec4 targetPos;
 std::unordered_map<uint8_t, std::string> blockNames;
 
 gui::AlignmentX alignmentX;
@@ -43,7 +44,10 @@ gui::Text title;
 gui::Slider xSlider{};
 gui::Slider ySlider{};
 
+
+
 static bool initializedSettings = false;
+static bool isTargeting = false;
 static bool isDisplayingCoords = false;
 std::string configPath;
 
@@ -161,39 +165,43 @@ $hook(void, StateGame, init, StateManager& s)
 
 	coordsContainer.xSpacing = 10;
 	coordsContainer.xMargin = 0;
+	coordsContainer.yMargin = 0;
 	coordsContainer.addElement(&positionTextX);
 	coordsContainer.addElement(&positionTextY);
 	coordsContainer.addElement(&positionTextZ);
 	coordsContainer.addElement(&positionTextW);
 
-	textContainer.ySpacing = 10;
+	textContainer.ySpacing = 15;
 	textContainer.yMargin = 10;
-	textContainer.elementYOffset = 15;
+	textContainer.elementYOffset = 6;
 	textContainer.addElement(&nameText);
 
 	tipContainer.addElement(&icon);
 	tipContainer.addElement(&textContainer);
+	tipContainer.elementYAlign=gui::ALIGN_CENTER_Y;
 	tipContainer.alignX(alignmentX);
 	tipContainer.alignY(alignmentY);
-	tipContainer.elementXOffset = -8;
+	tipContainer.xPadding = 5;
+	tipContainer.yPadding = 5;
 	tipContainer.yMargin = 0;
 	tipContainer.renderBackground = true;
 
 	ui.addElement(&tipContainer);
 }
 
+
 //Render custom UI
 $hook(void, Player, renderHud, GLFWwindow* window)
 {
 	original(self, window);
 
-	if (!self->targetingBlock) return;
+	if (!isTargeting) return;
 	if (self->inventoryManager.secondary) return ;
 
 	// technically in the game glDepthMask() is used, but for some reason that doesn't work in mods, thus using glDisable/glEnable instead.
 	glDisable(GL_DEPTH_TEST);
-	icon.tr->setClip(36 * (targetBlockId - 1), 37, 35, 36);
-	nameText.setText(getBlockName(targetBlockId));
+	
+	nameText.setText(targetName);
 	
 	if (self->isHoldingCompass() && !isDisplayingCoords) {
 		isDisplayingCoords = true;
@@ -204,12 +212,12 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 		textContainer.removeElement(&coordsContainer);
 	}
 	else if (self->isHoldingCompass()) {
-		positionTextX.text = std::format("X:{}", targetPos.x);
-		positionTextY.text = std::format("Y:{}", targetPos.y);
-		positionTextZ.text = std::format("Z:{}", targetPos.z);
-		positionTextW.text = std::format("W:{}", targetPos.w);
+		positionTextX.text = std::format("X:{:.1f}", targetPos.x);
+		positionTextY.text = std::format("Y:{:.1f}", targetPos.y);
+		positionTextZ.text = std::format("Z:{:.1f}", targetPos.z);
+		positionTextW.text = std::format("W:{:.1f}", targetPos.w);
 	}
-	
+	icon.tr->setClip(36 * (targetBlockId - 1), 37, 35, 36); // Not exactly the best place for it but it doesnt work elsewhere
 	ui.render();
 	glEnable(GL_DEPTH_TEST);
 }
@@ -219,13 +227,26 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 {
 	original(self, world, maxDist);
 
-	if (!self->targetingBlock) {
-		targetBlockId = -1;
-		return;
-	}
+	Entity* intersectedEntity = world->getEntityIntersection(self->cameraPos, self->reachEndpoint, self->EntityPlayerID);
 
-	targetBlockId = world->getBlock(self->targetBlock);
-	targetPos = self->targetBlock;
+	if (intersectedEntity != nullptr)
+	{
+		targetName = intersectedEntity->getName();
+		targetPos = intersectedEntity->getPos();
+		if (tipContainer.elements[0] == &icon)
+			tipContainer.removeElement(&icon);
+		isTargeting = true;
+	}
+	else if (self->targetingBlock) {
+		targetBlockId = world->getBlock(self->targetBlock);
+		targetName = getBlockName(targetBlockId);
+		targetPos = self->targetBlock;
+		if (tipContainer.elements[0] != &icon)
+			tipContainer.addElement(&icon, 0);
+		isTargeting = true;
+	}
+	else
+		isTargeting = false;
 }
 
 void updateConfig(const std::string& path, const nlohmann::json& j)
