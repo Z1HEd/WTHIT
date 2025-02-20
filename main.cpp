@@ -115,6 +115,10 @@ $hook(void, StateGame, init, StateManager& s)
 {
 	original(self, s);
 
+	tipContainer.clear();
+	textContainer.clear();
+	coordsContainer.clear();
+
 	blockNames = loadBlockNamesFromJSON("itemInfo.json");
 
 	font = { ResourceManager::get("pixelFont.png"), ShaderManager::get("textShader") };
@@ -203,6 +207,8 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 	
 	nameText.setText(targetName);
 	
+	Console::printLine(isDisplayingCoords);
+
 	if (self->isHoldingCompass() && !isDisplayingCoords) {
 		isDisplayingCoords = true;
 		textContainer.addElement(&coordsContainer);
