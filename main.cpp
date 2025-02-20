@@ -206,8 +206,6 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 	glDisable(GL_DEPTH_TEST);
 	
 	nameText.setText(targetName);
-	
-	Console::printLine(isDisplayingCoords);
 
 	if (self->isHoldingCompass() && !isDisplayingCoords) {
 		isDisplayingCoords = true;
