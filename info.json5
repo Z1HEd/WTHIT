@@ -10,6 +10,7 @@
   ],
   dependencies: {
 	"zihed.betterui": "? before",
- 	"tr1ngledev.4dkeybinds": "? before" // "?" is an optional dependency, "before" makes the dependency load before this mod, "> 1.0" dependency with version bigger than 1.0
+ 	"tr1ngledev.4dkeybinds": "? before",
+	"tr1ngledev.f1": "? after"
   },
 }

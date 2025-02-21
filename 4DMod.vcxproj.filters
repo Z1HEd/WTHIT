@@ -18,12 +18,8 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="cui\HBoxContainer.h">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="info.json5" />
-    <None Include="packages.config" />
   </ItemGroup>
 </Project>

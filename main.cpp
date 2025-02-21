@@ -3,14 +3,9 @@
 #include <4dm.h>
 #include "auilib/auilib.h"
 #include "BetterUI.h"
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <iostream>
-#include <unordered_map>
-#include <string>
+#include <fstream> // actually i do need that for config reading apparently
 
 using namespace fdm;
-using json = nlohmann::json;
 
 initDLL
 
@@ -48,39 +43,17 @@ gui::Slider ySlider{};
 
 static bool initializedSettings = false;
 static bool isTargeting = false;
+static bool isTargetingBlock = false;
 static bool isDisplayingCoords = false;
 std::string configPath;
 
-std::unordered_map<uint8_t, std::string> loadBlockNamesFromJSON(const std::string& filename) {
-	std::unordered_map<uint8_t, std::string> blockNames;
-
-	std::ifstream file(filename); // Open the file
-	if (!file.is_open()) {
-		std::cerr << "Failed to open file: " << filename << std::endl;
-		return blockNames; // Return empty map if failed
-	}
-
-	json j;
-	file >> j;  // Parse the JSON file
-
-	// Iterate through the JSON data
-	for (auto& [key, value] : j.items()) {
-		// Only process blocks (not tools or other items)
-		if (value["type"] == "block") {
-			uint8_t blockId = value["baseAttributes"]["id"];
-			blockNames[blockId] = key;  // Map block ID to name
-		}
-	}
-
-	return blockNames;  // Return the filled map
-}
 
 std::string getBlockName(uint8_t blockId) {
-	auto it = blockNames.find(blockId);
-	if (it != blockNames.end()) {
-		return it->second;  // Return block name if found
+	auto it = BlockInfo::blockNames->find(blockId);
+	if (it != BlockInfo::blockNames->end()) {
+		return it->second;
 	}
-	return "Unknown Block";  // Return a default value if not found
+	return "Unknown Block";
 }
 
 void viewportCallback(void* user, const glm::ivec4& pos, const glm::ivec2& scroll)
@@ -119,8 +92,6 @@ $hook(void, StateGame, init, StateManager& s)
 	textContainer.clear();
 	coordsContainer.clear();
 
-	blockNames = loadBlockNamesFromJSON("itemInfo.json");
-
 	font = { ResourceManager::get("pixelFont.png"), ShaderManager::get("textShader") };
 
 
@@ -134,8 +105,8 @@ $hook(void, StateGame, init, StateManager& s)
 	ui.qr = &qr;
 
 	icon.tr = ItemBlock::tr;
-	icon.width = 70;
-	icon.height = 72;
+	icon.width = 60;
+	icon.height = 62;
 
 	nameText.text = "Target name";
 	nameText.alignX(gui::ALIGN_LEFT);
@@ -187,7 +158,8 @@ $hook(void, StateGame, init, StateManager& s)
 	tipContainer.alignY(alignmentY);
 	tipContainer.xPadding = 5;
 	tipContainer.yPadding = 5;
-	tipContainer.yMargin = 0;
+	tipContainer.yMargin = 1;
+	tipContainer.xMargin = 5;
 	tipContainer.renderBackground = true;
 
 	ui.addElement(&tipContainer);
@@ -198,7 +170,6 @@ $hook(void, StateGame, init, StateManager& s)
 $hook(void, Player, renderHud, GLFWwindow* window)
 {
 	original(self, window);
-
 	if (!isTargeting) return;
 	if (self->inventoryManager.secondary) return ;
 
@@ -215,13 +186,19 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 		isDisplayingCoords = false;
 		textContainer.removeElement(&coordsContainer);
 	}
-	else if (self->isHoldingCompass()) {
+	else if (self->isHoldingCompass() && !isTargetingBlock) {
 		positionTextX.text = std::format("X:{:.1f}", targetPos.x);
 		positionTextY.text = std::format("Y:{:.1f}", targetPos.y);
 		positionTextZ.text = std::format("Z:{:.1f}", targetPos.z);
 		positionTextW.text = std::format("W:{:.1f}", targetPos.w);
 	}
-	icon.tr->setClip(36 * (targetBlockId - 1), 37, 35, 36); // Not exactly the best place for it but it doesnt work elsewhere
+	else if (self->isHoldingCompass() && isTargetingBlock) {
+		positionTextX.text = std::format("X:{}", targetPos.x);
+		positionTextY.text = std::format("Y:{}", targetPos.y);
+		positionTextZ.text = std::format("Z:{}", targetPos.z);
+		positionTextW.text = std::format("W:{}", targetPos.w);
+	}
+	icon.tr->setClip(36 * (targetBlockId - 1)+5, 42, 25, 26); // Not exactly the best place for it but it doesnt work elsewhere
 	ui.render();
 	glEnable(GL_DEPTH_TEST);
 }
@@ -240,6 +217,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		if (tipContainer.elements[0] == &icon)
 			tipContainer.removeElement(&icon);
 		isTargeting = true;
+		isTargetingBlock = false;
 	}
 	else if (self->targetingBlock) {
 		targetBlockId = world->getBlock(self->targetBlock);
@@ -248,6 +226,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		if (tipContainer.elements[0] != &icon)
 			tipContainer.addElement(&icon, 0);
 		isTargeting = true;
+		isTargetingBlock = true;
 	}
 	else
 		isTargeting = false;
@@ -518,4 +497,9 @@ $hook(void, StateSettings, render, StateManager& s)
 
 	initializedSettings = true;
 
+}
+
+
+$hook(bool, Player, isHoldingCompass) {
+	return original(self) || self->equipment.getSlot(0)->get()->getName() == "Compass";
 }
