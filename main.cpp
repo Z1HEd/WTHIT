@@ -402,7 +402,7 @@ int getYValue(gui::AlignmentY alignment) {
 }
 
 void initSettings() {
-	title.setText("WAILA Options:");
+	title.setText("WTHIT Options:");
 	title.alignX(gui::ALIGN_CENTER_X);
 
 
