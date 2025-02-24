@@ -501,5 +501,5 @@ $hook(void, StateSettings, render, StateManager& s)
 
 
 $hook(bool, Player, isHoldingCompass) {
-	return original(self) || self->equipment.getSlot(0)->get()->getName() == "Compass";
+	return original(self) || (self->equipment.getSlot(0)->get()!=nullptr && self->equipment.getSlot(0)->get()->getName() == "Compass");
 }
