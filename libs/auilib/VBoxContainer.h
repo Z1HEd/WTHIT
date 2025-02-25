@@ -152,6 +152,10 @@ namespace aui {
 			
 		}
 
+		bool hasElement(gui::Element* element) {
+			return std::find(elements.begin(), elements.end(), element) != elements.end() ;
+		}
+
 		void alignX(gui::AlignmentX alignment) override { xAlign = alignment; }
 		void alignY(gui::AlignmentY alignment) override { yAlign = alignment; }
 		void offsetX(int offset) override { xOffset = offset; }

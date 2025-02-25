@@ -22,6 +22,7 @@ aui::HBoxContainer coordsContainer; // for seperate coordinates
 
 gui::Image icon;
 gui::Text nameText{};
+aui::BarIndicator healthBar;
 gui::Text positionTextX{}; // Seperate texts for each coord because i want them to be different colors like in compass
 gui::Text positionTextY{}; // I want BBCode for cristmass Mashpoe pls
 gui::Text positionTextZ{};
@@ -44,6 +45,9 @@ gui::Slider ySlider{};
 static bool initializedSettings = false;
 static bool isTargeting = false;
 static bool isTargetingBlock = false;
+static float currentTargetHealth = -1;
+static float currentTargetMaxHealth = -1;
+static bool isDisplayingHealth = false;
 static bool isDisplayingCoords = false;
 std::string configPath;
 
@@ -112,7 +116,13 @@ $hook(void, StateGame, init, StateManager& s)
 	nameText.alignX(gui::ALIGN_LEFT);
 	nameText.size = 2;
 	nameText.shadow = true;
-
+	
+	healthBar.isHorizontal = true;
+	healthBar.setSize(200,10);
+	healthBar.setFillColor({ 114.0f/256.0f,11.0f / 256.0f,22.0f / 256.0f,1 });
+	healthBar.setOutlineColor({ .6,.6,.6,1 });
+	healthBar.textAlignment = 1; // center;
+	healthBar.text.shadow = true;
 
 	positionTextX.text = "X";
 	positionTextX.alignX(gui::ALIGN_LEFT);
@@ -146,14 +156,14 @@ $hook(void, StateGame, init, StateManager& s)
 	coordsContainer.addElement(&positionTextZ);
 	coordsContainer.addElement(&positionTextW);
 
-	textContainer.ySpacing = 15;
-	textContainer.yMargin = 10;
-	textContainer.elementYOffset = 6;
+	textContainer.ySpacing = 12;
+	textContainer.yMargin = 6;
+	textContainer.elementYOffset = 4;
 	textContainer.addElement(&nameText);
-
+	textContainer.addElement(&healthBar);
 	tipContainer.addElement(&icon);
 	tipContainer.addElement(&textContainer);
-	tipContainer.elementYAlign=gui::ALIGN_CENTER_Y;
+	tipContainer.elementYAlign = gui::ALIGN_CENTER_Y;
 	tipContainer.alignX(alignmentX);
 	tipContainer.alignY(alignmentY);
 	tipContainer.xPadding = 5;
@@ -171,12 +181,17 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 {
 	original(self, window);
 	if (!isTargeting) return;
-	if (self->inventoryManager.secondary) return ;
+	if (self->inventoryManager.secondary) return;
 
 	// technically in the game glDepthMask() is used, but for some reason that doesn't work in mods, thus using glDisable/glEnable instead.
 	glDisable(GL_DEPTH_TEST);
-	
+
 	nameText.setText(targetName);
+
+	if (currentTargetMaxHealth>=0) {
+		healthBar.setMaxFill(currentTargetMaxHealth);
+		healthBar.setFill(currentTargetHealth);
+	}
 
 	if (self->isHoldingCompass() && !isDisplayingCoords) {
 		isDisplayingCoords = true;
@@ -198,12 +213,26 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 		positionTextZ.text = std::format("Z:{}", targetPos.z);
 		positionTextW.text = std::format("W:{}", targetPos.w);
 	}
-	icon.tr->setClip(36 * (targetBlockId - 1)+5, 42, 25, 26); // Not exactly the best place for it but it doesnt work elsewhere
+	icon.tr->setClip(36 * (targetBlockId - 1) + 5, 42, 25, 26); // Not exactly the best place for it but it doesnt work elsewhere
 	ui.render();
 	glEnable(GL_DEPTH_TEST);
 }
 
-//Update targeted block
+void getHealthInfo(Entity* entity, float* currentHealth, float* maxHealth) { //Ridiculous x2
+	*currentHealth = -1;
+	*maxHealth = -1;
+
+	if (entity->getName()=="Spider") {
+		*currentHealth = ((EntitySpider*)entity)->health;
+		*maxHealth = 20;
+	}
+	else if (entity->getName() == "Butterfly") {
+		*currentHealth = ((EntityButterfly*)entity)->health;
+		*maxHealth = 30;
+	}
+}
+
+//Update target
 $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 {
 	original(self, world, maxDist);
@@ -218,6 +247,13 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 			tipContainer.removeElement(&icon);
 		isTargeting = true;
 		isTargetingBlock = false;
+		getHealthInfo(intersectedEntity, &currentTargetHealth, &currentTargetMaxHealth);
+		if (currentTargetMaxHealth < 0 && textContainer.hasElement(&healthBar)) {
+			textContainer.removeElement(&healthBar);
+		}
+		if (currentTargetMaxHealth >= 0 && !textContainer.hasElement(&healthBar)) {
+			textContainer.addElement(&healthBar,1);
+		}
 	}
 	else if (self->targetingBlock) {
 		targetBlockId = world->getBlock(self->targetBlock);
@@ -227,6 +263,12 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 			tipContainer.addElement(&icon, 0);
 		isTargeting = true;
 		isTargetingBlock = true;
+		isDisplayingHealth = false;
+		if (textContainer.hasElement(&healthBar) ){
+			textContainer.removeElement(&healthBar);
+		}
+		currentTargetHealth = -1;
+		currentTargetMaxHealth = -1;
 	}
 	else
 		isTargeting = false;
@@ -331,24 +373,24 @@ inline static int getY(gui::Element* element)
 void updateAlignment() {
 	switch (alignmentX) {
 	case gui::ALIGN_LEFT:
-		xSlider.setText("Horizontal alignment: Left");
+		xSlider.setText("Horizontal Alignment: Left");
 		break;
 	case gui::ALIGN_RIGHT:
-		xSlider.setText("Horizontal alignment: Right");
+		xSlider.setText("Horizontal Alignment: Right");
 		break;
 	case gui::ALIGN_CENTER_X:
-		xSlider.setText("Horizontal alignment: Center");
+		xSlider.setText("Horizontal Alignment: Center");
 		break;
 	}
 	switch (alignmentY) {
 	case gui::ALIGN_TOP:
-		ySlider.setText("Vertical alignment: Top");
+		ySlider.setText("Vertical Alignment: Top");
 		break;
 	case gui::ALIGN_BOTTOM:
-		ySlider.setText("Vertical alignment: Bottom");
+		ySlider.setText("Vertical Alignment: Bottom");
 		break;
 	case gui::ALIGN_CENTER_Y:
-		ySlider.setText("Vertical alignment: Center");
+		ySlider.setText("Vertical Alignment: Center");
 		break;
 	}
 	tipContainer.alignX(alignmentX);
