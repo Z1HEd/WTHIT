@@ -11,6 +11,5 @@
   dependencies: {
 	"zihed.betterui": "? before",
  	"tr1ngledev.4dkeybinds": "? before",
-	"tr1ngledev.f1": "? after"
   },
 }

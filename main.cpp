@@ -53,8 +53,8 @@ std::string configPath;
 
 
 std::string getBlockName(uint8_t blockId) {
-	auto it = BlockInfo::blockNames->find(blockId);
-	if (it != BlockInfo::blockNames->end()) {
+	auto it = BlockInfo::blockNames.find(blockId);
+	if (it != BlockInfo::blockNames.end()) {
 		return it->second;
 	}
 	return "Unknown Block";
@@ -108,7 +108,7 @@ $hook(void, StateGame, init, StateManager& s)
 	ui.font = &font;
 	ui.qr = &qr;
 
-	icon.tr = ItemBlock::tr;
+	icon.tr = &ItemBlock::tr;
 	icon.width = 60;
 	icon.height = 62;
 
@@ -117,10 +117,11 @@ $hook(void, StateGame, init, StateManager& s)
 	nameText.size = 2;
 	nameText.shadow = true;
 	
-	healthBar.isHorizontal = true;
+	healthBar.showFractionLines = true;
 	healthBar.setSize(200,10);
-	healthBar.setFillColor({ 114.0f/256.0f,11.0f / 256.0f,22.0f / 256.0f,1 });
-	healthBar.setOutlineColor({ .6,.6,.6,1 });
+	healthBar.setFillColor({ 154.0f / 256.0f, 20.0f / 256.0f, 32.0f / 256.0f, 1 });
+	healthBar.setOutlineColor({ .6,.6,.6,1 }); 
+	healthBar.setFractionLineColor({ 114.0f / 256.0f,11.0f / 256.0f,22.0f / 256.0f,1 });
 	healthBar.textAlignment = 1; // center;
 	healthBar.text.shadow = true;
 
@@ -218,17 +219,17 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 	glEnable(GL_DEPTH_TEST);
 }
 
-void getHealthInfo(Entity* entity, float* currentHealth, float* maxHealth) { //Ridiculous x2
-	*currentHealth = -1;
-	*maxHealth = -1;
+void getHealthInfo(Entity* entity, float& currentHealth, float& maxHealth) { //Ridiculous 
+	currentHealth = -1;
+	maxHealth = -1;
 
 	if (entity->getName()=="Spider") {
-		*currentHealth = ((EntitySpider*)entity)->health;
-		*maxHealth = 20;
+		currentHealth = ((EntitySpider*)entity)->health;
+		maxHealth = 20;
 	}
 	else if (entity->getName() == "Butterfly") {
-		*currentHealth = ((EntityButterfly*)entity)->health;
-		*maxHealth = 30;
+		currentHealth = ((EntityButterfly*)entity)->health;
+		maxHealth = 30;
 	}
 }
 
@@ -247,7 +248,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 			tipContainer.removeElement(&icon);
 		isTargeting = true;
 		isTargetingBlock = false;
-		getHealthInfo(intersectedEntity, &currentTargetHealth, &currentTargetMaxHealth);
+		getHealthInfo(intersectedEntity, currentTargetHealth, currentTargetMaxHealth);
 		if (currentTargetMaxHealth < 0 && textContainer.hasElement(&healthBar)) {
 			textContainer.removeElement(&healthBar);
 		}
@@ -541,7 +542,12 @@ $hook(void, StateSettings, render, StateManager& s)
 
 }
 
+// Make auilib work lol
+$hook(void, StateGame, windowResize, StateManager& s, GLsizei width, GLsizei height) {
+	original(self, s, width, height);
+	viewportCallback(s.window, { 0,0, width, height },{0,0});
+}
 
 $hook(bool, Player, isHoldingCompass) {
-	return original(self) || (self->equipment.getSlot(0)->get()!=nullptr && self->equipment.getSlot(0)->get()->getName() == "Compass");
+	return original(self) || (self->equipment.getSlot(0).get()!=nullptr && self->equipment.getSlot(0).get()->getName() == "Compass");
 }
