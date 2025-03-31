@@ -222,7 +222,6 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 void getHealthInfo(Entity* entity, float& currentHealth, float& maxHealth) { //Ridiculous 
 	currentHealth = -1;
 	maxHealth = -1;
-
 	if (entity->getName()=="Spider") {
 		currentHealth = ((EntitySpider*)entity)->health;
 		maxHealth = 20;
@@ -230,6 +229,10 @@ void getHealthInfo(Entity* entity, float& currentHealth, float& maxHealth) { //R
 	else if (entity->getName() == "Butterfly") {
 		currentHealth = ((EntityButterfly*)entity)->health;
 		maxHealth = 30;
+	}
+	else if (entity->getName() == "Player") {
+		currentHealth = ((EntityPlayer*)entity)->ownedPlayer->health;
+		maxHealth = Player::maxHealth;
 	}
 }
 
