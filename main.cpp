@@ -214,7 +214,6 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 		positionTextZ.text = std::format("Z:{}", targetPos.z);
 		positionTextW.text = std::format("W:{}", targetPos.w);
 	}
-	icon.tr->setClip(36 * (targetBlockId - 1) + 5, 42, 25, 26); // Not exactly the best place for it but it doesnt work elsewhere
 	ui.render();
 	glEnable(GL_DEPTH_TEST);
 }
@@ -234,6 +233,10 @@ void getHealthInfo(Entity* entity, float& currentHealth, float& maxHealth) { //R
 		currentHealth = ((EntityPlayer*)entity)->ownedPlayer->health;
 		maxHealth = Player::maxHealth;
 	}
+	else if (entity->getName() == "Alidade") {
+		currentHealth = ((EntityAlidade*)entity)->health;
+		maxHealth = EntityAlidade::HEALTH_MAX;
+	}
 }
 
 //Update target
@@ -247,8 +250,12 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 	{
 		targetName = intersectedEntity->getName();
 		targetPos = intersectedEntity->getPos();
-		if (tipContainer.elements[0] == &icon)
+		
+		if (tipContainer.elements[0] == &icon && intersectedEntity->getName() != "Alidade")
 			tipContainer.removeElement(&icon);
+		else if (tipContainer.elements[0] != &icon && intersectedEntity->getName() == "Alidade") {
+			tipContainer.addElement(&icon,0);
+		}
 		isTargeting = true;
 		isTargetingBlock = false;
 		getHealthInfo(intersectedEntity, currentTargetHealth, currentTargetMaxHealth);
@@ -258,6 +265,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		if (currentTargetMaxHealth >= 0 && !textContainer.hasElement(&healthBar)) {
 			textContainer.addElement(&healthBar,1);
 		}
+		icon.tr->setClip(36 * 12 + 5, 117, 25, 26);
 	}
 	else if (self->targetingBlock) {
 		targetBlockId = world->getBlock(self->targetBlock);
@@ -273,6 +281,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		}
 		currentTargetHealth = -1;
 		currentTargetMaxHealth = -1;
+		icon.tr->setClip(36 * (targetBlockId - 1) + 5, 42, 25, 26);
 	}
 	else
 		isTargeting = false;
