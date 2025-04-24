@@ -28,7 +28,7 @@ gui::Text positionTextY{}; // I want BBCode for cristmass Mashpoe pls
 gui::Text positionTextZ{};
 gui::Text positionTextW{};
 
-glm::uint8_t targetBlockId;
+BlockInfo::TYPE targetBlockId;
 std::string targetName;
 glm::vec4 targetPos;
 std::unordered_map<uint8_t, std::string> blockNames;
@@ -41,7 +41,8 @@ gui::Slider xSlider{};
 gui::Slider ySlider{};
 
 
-
+static int iconClipX = 0;
+static int iconClipY = 0;
 static bool initializedSettings = false;
 static bool isTargeting = false;
 static bool isTargetingBlock = false;
@@ -214,6 +215,7 @@ $hook(void, Player, renderHud, GLFWwindow* window)
 		positionTextZ.text = std::format("Z:{}", targetPos.z);
 		positionTextW.text = std::format("W:{}", targetPos.w);
 	}
+	icon.tr->setClip(iconClipX, iconClipY, 25, 26);
 	ui.render();
 	glEnable(GL_DEPTH_TEST);
 }
@@ -239,6 +241,11 @@ void getHealthInfo(Entity* entity, float& currentHealth, float& maxHealth) { //R
 	}
 }
 
+stl::string getEntityName(Entity* entity) {
+	stl::string name = entity->getName();
+	return name == "Player" ? static_cast<EntityPlayer*>(entity)->displayName : name;
+}
+
 //Update target
 $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 {
@@ -248,7 +255,7 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 
 	if (intersectedEntity != nullptr)
 	{
-		targetName = intersectedEntity->getName();
+		targetName = getEntityName(intersectedEntity);
 		targetPos = intersectedEntity->getPos();
 		
 		if (tipContainer.elements[0] == &icon && intersectedEntity->getName() != "Alidade")
@@ -265,10 +272,11 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		if (currentTargetMaxHealth >= 0 && !textContainer.hasElement(&healthBar)) {
 			textContainer.addElement(&healthBar,1);
 		}
-		icon.tr->setClip(36 * 12 + 5, 117, 25, 26);
+		iconClipX = 36 * 12 + 5;
+		iconClipY = 117;
 	}
 	else if (self->targetingBlock) {
-		targetBlockId = world->getBlock(self->targetBlock);
+		targetBlockId = (BlockInfo::TYPE)world->getBlock(self->targetBlock);
 		targetName = getBlockName(targetBlockId);
 		targetPos = self->targetBlock;
 		if (tipContainer.elements[0] != &icon)
@@ -281,7 +289,8 @@ $hook(void, Player, updateTargetBlock, World* world, float maxDist)
 		}
 		currentTargetHealth = -1;
 		currentTargetMaxHealth = -1;
-		icon.tr->setClip(36 * (targetBlockId - 1) + 5, 42, 25, 26);
+		iconClipX = 36 * (targetBlockId - 1) + 5;
+		iconClipY = 42;
 	}
 	else
 		isTargeting = false;
