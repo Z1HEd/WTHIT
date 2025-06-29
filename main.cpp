@@ -9,8 +9,6 @@ using namespace fdm;
 
 initDLL
 
-aui::VBoxContainer settingsContainer;
-
 QuadRenderer qr{};
 FontRenderer font{};
 
@@ -465,7 +463,7 @@ int getYValue(gui::AlignmentY alignment) {
 	return 0;
 }
 
-void initSettings() {
+void initSettings(StateSettings* self) {
 	title.setText("WTHIT Options:");
 	title.alignX(gui::ALIGN_CENTER_X);
 
@@ -497,10 +495,6 @@ void initSettings() {
 			updateConfig(configPath, { { "AlignmentX", alignmentX },{ "AlignmentY", alignmentY } });
 		};
 
-	updateAlignment();
-}
-
-void initSettingsWithoutBetterUI(StateSettings *self) {
 	int lowestY = 0;
 	for (auto& e : self->mainContentBox.elements)
 	{
@@ -512,9 +506,6 @@ void initSettingsWithoutBetterUI(StateSettings *self) {
 	}
 	int oldLowest = lowestY;
 
-	initSettings();
-
-	title.size = 2;
 	title.offsetY(lowestY += 100);
 	xSlider.offsetY(lowestY += 100);
 	ySlider.offsetY(lowestY += 100);
@@ -525,23 +516,22 @@ void initSettingsWithoutBetterUI(StateSettings *self) {
 
 	self->secretButton.yOffset += lowestY - oldLowest;
 	self->mainContentBox.scrollH += lowestY - oldLowest;
+
+	updateAlignment();
+
+
+}
+
+void initSettingsWithoutBetterUI(StateSettings *self) {
+	initSettings(self);
+	title.size = 2;
 }
 
 void initSettingsWithBetterUI(StateSettings *self) {
-	settingsContainer.clear();
-
-	initSettings();
+	initSettings(self);
 
 	title.size = 3;
 	title.shadow = true;
-
-	settingsContainer.addElement(&title);
-	settingsContainer.addElement(&xSlider);
-	settingsContainer.addElement(&ySlider);
-
-	settingsContainer.ySpacing = 20;
-	
-	BetterUI::getCategoryContainer()->addElement(&settingsContainer, BetterUI::getCategoryContainer()->elements.size()-1);
 }
 
 //Add custom settings 
