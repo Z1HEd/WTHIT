@@ -9,6 +9,8 @@ using namespace fdm;
 
 initDLL
 
+aui::VBoxContainer settingsContainer;
+
 QuadRenderer qr{};
 FontRenderer font{};
 
@@ -526,33 +528,20 @@ void initSettingsWithoutBetterUI(StateSettings *self) {
 }
 
 void initSettingsWithBetterUI(StateSettings *self) {
-	int lowestY = 0;
-	for (auto& e : self->mainContentBox.elements)
-	{
-		//wth is a secret button? gonna check it out rn
-		if (e == &self->secretButton) // skip the secret button
-			continue;
-
-		lowestY = std::max(getY(e), lowestY);
-	}
-	int oldLowest = lowestY;
+	settingsContainer.clear();
 
 	initSettings();
 
 	title.size = 3;
 	title.shadow = true;
 
-	title.offsetY(lowestY += 100);
-	xSlider.offsetY(lowestY += 100);
-	ySlider.offsetY(lowestY += 100);
+	settingsContainer.addElement(&title);
+	settingsContainer.addElement(&xSlider);
+	settingsContainer.addElement(&ySlider);
 
-	self->mainContentBox.addElement(&title);
-	self->mainContentBox.addElement(&xSlider);
-	self->mainContentBox.addElement(&ySlider);
-
-	self->secretButton.yOffset += lowestY - oldLowest;
-	self->mainContentBox.scrollH += lowestY - oldLowest;
-
+	settingsContainer.ySpacing = 20;
+	
+	BetterUI::getCategoryContainer()->addElement(&settingsContainer, BetterUI::getCategoryContainer()->elements.size()-1);
 }
 
 //Add custom settings 
